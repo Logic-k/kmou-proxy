@@ -9,16 +9,21 @@ app.use(cors());
 app.get('/api/notices', async (req, res) => {
   try {
     const url = "https://www.kmou.ac.kr/kmou/na/ntt/selectNttList.do?mi=2032&bbsId=10373";
-    const { data } = await axios.get(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
+    
+    // 404 응답이 와도 내용을 긁어올 수 있도록 validateStatus 추가
+    const response = await axios.get(url, {
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://www.kmou.ac.kr/kmou/main.do'
+        },
+        validateStatus: (status) => status < 500 // 404 에러가 나도 500 미만이면 성공으로 간주
     });
-    const $ = cheerio.load(data);
+
+    const $ = cheerio.load(response.data);
     const notices = [];
 
-    // 해양대 공지사항 테이블 행(tr) 순회
     $('.nttListTable tbody tr').each((i, el) => {
       const row = $(el);
-      // '공지' 배지나 번호가 없는 빈 행 제외
       const num = row.find('td.num').text().trim();
       if (!num) return;
 
@@ -28,19 +33,20 @@ app.get('/api/notices', async (req, res) => {
       const writer = row.find('td.writer').text().trim();
       const date = row.find('td.date').text().trim();
 
-      notices.push({
-        number: num,
-        title: title,
-        author: writer,
-        date: date,
-        url: "https://www.kmou.ac.kr" + link
-      });
+      if (title) {
+        notices.push({
+          number: num,
+          title: title,
+          author: writer,
+          date: date,
+          url: "https://www.kmou.ac.kr" + link
+        });
+      }
     });
 
     res.json(notices);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to fetch notices" });
+    res.status(500).json({ error: error.message });
   }
 });
 
